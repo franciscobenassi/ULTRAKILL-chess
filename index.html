@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ULTRAKILL Chess</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-black text-red-500 font-mono">
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ChessGame = () => {
+            const [board, setBoard] = useState([]);
+            const [selectedSquare, setSelectedSquare] = useState([]);
+            const [currentPlayer, setCurrentPlayer] = useState('white');
+            const [validMoves, setValidMoves] = useState([]);
+            const [gameStatus, setGameStatus] = useState('BLOOD IS FUEL');
+            const [kills, setKills] = useState({ white: 0, black: 0 });
+            const [combo, setCombo] = useState(0);
+            const [stylePoints, setStylePoints] = useState(0);
+            const [styleRank, setStyleRank] = useState('DESTRUCTIVE');
+
+            const pieceNames = {
+                P: 'HUSK',
+                R: 'MINOS PRIME',
+                N: 'SISYPHUS PRIME',
+                B: 'SENTRY',
+                Q: 'V2',
+                K: 'V1'
+            };
+
+            const pieceImages = {
+                P: 'https://i.ibb.co/Y7GZbc4j/IMG-0918.png',
+                B: 'https://i.ibb.co/XZQ1V6xM/IMG-0915.png',
+                N: 'https://i.ibb.co/B2Ht90K8/IMG-0916.png',
+                R: 'https://i.ibb.co/Tqt1VryN/IMG-0922.png',
+                K: 'https://i.ibb.co/XfVjtK00/IMG-0921.png',
+                Q: 'https://i.ibb.co/rfQM0c4b/IMG-0913.png'
+            };
+
+            const styleRanks = ['DESTRUCTIVE', 'CHAOTIC', 'BRUTAL', 'ANARCHIC', 'SUPREME', 'ULTRAKILL'];
+
+            useEffect(() => {
+                initializeBoard();
+            }, []);
+
+            useEffect(() => {
+                updateStyleRank();
+            }, [stylePoints]);
+
+            const initializeBoard = () => {
+                const initial = [
+                    ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'],
+                    ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                    [null, null, null, null, null, null, null, null],
+                    [null, null, null, null, null, null, null, null],
+                    [null, null, null, null, null, null, null, null],
+                    [null, null, null, null, null, null, null, null],
+                    ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                    ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
+                ];
+                setBoard(initial);
+            };
+
+            const updateStyleRank = () => {
+                if (stylePoints >= 500) setStyleRank('ULTRAKILL');
+                else if (stylePoints >= 400) setStyleRank('SUPREME');
+                else if (stylePoints >= 300) setStyleRank('ANARCHIC');
+                else if (stylePoints >= 200) setStyleRank('BRUTAL');
+                else if (stylePoints >= 100) setStyleRank('CHAOTIC');
+                else setStyleRank('DESTRUCTIVE');
+            };
+
+            const calculateStylePoints = (piece, isCombo) => {
+                const basePoints = {
+                    'P': 10,
+                    'R': 50,
+                    'N': 50,
+                    'B': 30,
+                    'Q': 90,
+                    'K': 100
+                };
+                
+                const points = basePoints[piece.toUpperCase()] || 10;
+                const comboMultiplier = isCombo ? (1 + combo * 0.5) : 1;
+                return Math.floor(points * comboMultiplier);
+            };
+
+            const getPieceColor = (piece) => {
+                if (!piece) return null;
+                return piece === piece.toUpperCase() ? 'black' : 'white';
+            };
+
+            const isValidMove = (fromRow, fromCol, toRow, toCol) => {
+                const piece = board[fromRow][fromCol];
+                if (!piece) return false;
+
+                const targetPiece = board[toRow][toCol];
+                if (targetPiece && getPieceColor(targetPiece) === getPieceColor(piece)) {
+                    return false;
+                }
+
+                const pieceType = piece.toUpperCase();
+                const direction = getPieceColor(piece) === 'white' ? -1 : 1;
+
+                switch (pieceType) {
+                    case 'P':
+                        const startRow = getPieceColor(piece) === 'white' ? 6 : 1;
+                        if (fromCol === toCol && !targetPiece) {
+                            if (toRow === fromRow + direction) return true;
+                            if (fromRow === startRow && toRow === fromRow + 2 * direction && !board[fromRow + direction][fromCol]) {
+                                return true;
+                            }
+                        }
+                        if (Math.abs(toCol - fromCol) === 1 && toRow === fromRow + direction && targetPiece) {
+                            return true;
+                        }
+                        return false;
+
+                    case 'R':
+                        if (fromRow !== toRow && fromCol !== toCol) return false;
+                        return isPathClear(fromRow, fromCol, toRow, toCol);
+
+                    case 'N':
+                        const rowDiff = Math.abs(toRow - fromRow);
+                        const colDiff = Math.abs(toCol - fromCol);
+                        return (rowDiff === 2 && colDiff === 1) || (rowDiff === 1 && colDiff === 2);
+
+                    case 'B':
+                        if (Math.abs(toRow - fromRow) !== Math.abs(toCol - fromCol)) return false;
+                        return isPathClear(fromRow, fromCol, toRow, toCol);
+
+                    case 'Q':
+                        if (fromRow === toRow || fromCol === toCol || Math.abs(toRow - fromRow) === Math.abs(toCol - fromCol)) {
+                            return isPathClear(fromRow, fromCol, toRow, toCol);
+                        }
+                        return false;
+
+                    case 'K':
+                        return Math.abs(toRow - fromRow) <= 1 && Math.abs(toCol - fromCol) <= 1;
+
+                    default:
+                        return false;
+                }
+            };
+
+            const isPathClear = (fromRow, fromCol, toRow, toCol) => {
+                const rowStep = toRow > fromRow ? 1 : toRow < fromRow ? -1 : 0;
+                const colStep = toCol > fromCol ? 1 : toCol < fromCol ? -1 : 0;
+                let currentRow = fromRow + rowStep;
+                let currentCol = fromCol + colStep;
+
+                while (currentRow !== toRow || currentCol !== toCol) {
+                    if (board[currentRow][currentCol]) return false;
+                    currentRow += rowStep;
+                    currentCol += colStep;
+                }
+                return true;
+            };
+
+            const calculateValidMoves = (row, col) => {
+                const moves = [];
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        if (isValidMove(row, col, r, c)) {
+                            moves.push([r, c]);
+                        }
+                    }
+                }
+                return moves;
+            };
+
+            const handleSquareClick = (row, col) => {
+                if (selectedSquare.length > 0) {
+                    const [selectedRow, selectedCol] = selectedSquare;
+                    const piece = board[selectedRow][selectedCol];
+
+                    if (getPieceColor(piece) === currentPlayer && isValidMove(selectedRow, selectedCol, row, col)) {
+                        const newBoard = board.map(r => [...r]);
+                        const targetPiece = newBoard[row][col];
+                        
+                        newBoard[row][col] = newBoard[selectedRow][selectedCol];
+                        newBoard[selectedRow][selectedCol] = null;
+
+                        setBoard(newBoard);
+                        
+                        if (targetPiece) {
+                            const newKills = { ...kills };
+                            newKills[currentPlayer]++;
+                            setKills(newKills);
+                            
+                            const newCombo = combo + 1;
+                            setCombo(newCombo);
+                            
+                            const points = calculateStylePoints(targetPiece, newCombo > 1);
+                            const newStylePoints = stylePoints + points;
+                            setStylePoints(newStylePoints);
+                            
+                            const victimName = pieceNames[targetPiece.toUpperCase()];
+                            setGameStatus(`${victimName} DESTROYED +${points}`);
+                            
+                            setTimeout(() => {
+                                setGameStatus('BLOOD IS FUEL');
+                            }, 1500);
+                        } else {
+                            setCombo(0);
+                        }
+
+                        setCurrentPlayer(currentPlayer === 'white' ? 'black' : 'white');
+                        setSelectedSquare([]);
+                        setValidMoves([]);
+                    } else if (board[row][col] && getPieceColor(board[row][col]) === currentPlayer) {
+                        setSelectedSquare([row, col]);
+                        setValidMoves(calculateValidMoves(row, col));
+                    } else {
+                        setSelectedSquare([]);
+                        setValidMoves([]);
+                    }
+                } else if (board[row][col] && getPieceColor(board[row][col]) === currentPlayer) {
+                    setSelectedSquare([row, col]);
+                    setValidMoves(calculateValidMoves(row, col));
+                }
+            };
+
+            const isValidMoveSquare = (row, col) => {
+                return validMoves.some(([r, c]) => r === row && c === col);
+            };
+
+            const resetGame = () => {
+                initializeBoard();
+                setSelectedSquare([]);
+                setCurrentPlayer('white');
+                setValidMoves([]);
+                setGameStatus('BLOOD IS FUEL');
+                setKills({ white: 0, black: 0 });
+                setCombo(0);
+                setStylePoints(0);
+                setStyleRank('DESTRUCTIVE');
+            };
+
+            return (
+                <div className="min-h-screen bg-black text-red-500 p-4 font-mono">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="text-center mb-6">
+                            <h1 className="text-5xl font-bold mb-2 text-red-600 tracking-widest animate-pulse">
+                                ULTRAKILL CHESS
+                            </h1>
+                            <div className="flex justify-center items-center gap-4 text-xl flex-wrap">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-yellow-400">{gameStatus}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                            <div className="bg-red-950 border-2 border-red-600 p-3 rounded">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-white font-bold">BRANCO</span>
+                                </div>
+                                <div className="text-yellow-400">KILLS: {kills.white}</div>
+                            </div>
+                            
+                            <div className="bg-purple-950 border-4 border-yellow-500 p-4 rounded text-center">
+                                <div className="flex items-center justify-center gap-2 mb-2">
+                                    <span className="text-yellow-400 font-bold text-xl">STYLE</span>
+                                </div>
+                                <div className="text-3xl font-bold text-cyan-400 mb-1">{stylePoints}</div>
+                                <div className="text-xl font-bold text-orange-500 animate-pulse">{styleRank}</div>
+                                {combo > 1 && <div className="text-lg text-red-400 mt-1">COMBO x{combo}!</div>}
+                            </div>
+
+                            <div className="bg-blue-950 border-2 border-blue-600 p-3 rounded">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-white font-bold">PRETO</span>
+                                </div>
+                                <div className="text-yellow-400">KILLS: {kills.black}</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-900 border-4 border-red-600 p-4 rounded-lg shadow-2xl shadow-red-900/50">
+                            <div className="text-center mb-3 text-xl text-yellow-400 font-bold">
+                                {currentPlayer === 'white' ? '▼ VEZ DO BRANCO ▼' : '▲ VEZ DO PRETO ▲'}
+                            </div>
+                            
+                            <div className="flex justify-center">
+                                <div className="inline-block border-4 border-red-700">
+                                    {board.map((row, rowIndex) => (
+                                        <div key={rowIndex} className="flex">
+                                            {row.map((piece, colIndex) => {
+                                                const isSelected = selectedSquare.length > 0 && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
+                                                const isValidMoveSquareCheck = isValidMoveSquare(rowIndex, colIndex);
+                                                const isDark = (rowIndex + colIndex) % 2 === 1;
+                                                
+                                                let bgColor = isDark ? 'bg-gray-800' : 'bg-gray-700';
+                                                if (isSelected) bgColor = 'bg-red-600';
+                                                if (isValidMoveSquareCheck) bgColor = board[rowIndex][colIndex] ? 'bg-orange-600' : 'bg-yellow-600';
+
+                                                return (
+                                                    <button
+                                                        key={colIndex}
+                                                        onClick={() => handleSquareClick(rowIndex, colIndex)}
+                                                        className={`w-20 h-20 ${bgColor} border border-red-900 flex items-center justify-center transition-all hover:brightness-125 hover:scale-105`}
+                                                    >
+                                                        {piece && (
+                                                            <div className="flex flex-col items-center justify-center w-full h-full">
+                                                                <div 
+                                                                    className="relative w-16 h-16 flex items-center justify-center bg-cover bg-center bg-no-repeat"
+                                                                    style={{
+                                                                        backgroundImage: `url('${pieceImages[piece.toUpperCase()]}')`,
+                                                                        filter: getPieceColor(piece) === 'white' ? 'brightness(1.1) drop-shadow(0 0 10px rgba(0,255,255,1))' : 'drop-shadow(0 0 10px rgba(255,0,0,1))'
+                                                                    }}
+                                                                >
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 text-center">
+                            <button
+                                onClick={resetGame}
+                                className="bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-8 rounded border-2 border-red-500 transition-all hover:scale-105 text-xl"
+                            >
+                                RESTART
+                            </button>
+                        </div>
+
+                        <div className="mt-6 bg-gray-900 border-2 border-cyan-600 p-4 rounded text-cyan-400 text-sm">
+                            <div className="font-bold text-center mb-2 text-lg">PERSONAGENS</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                <div>HUSK (Peão)</div>
+                                <div>MINOS PRIME (Torre)</div>
+                                <div>SISYPHUS PRIME (Cavalo)</div>
+                                <div>SENTRY (Bispo)</div>
+                                <div>V2 (Dama)</div>
+                                <div>V1 (Rei)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ChessGame />, document.getElementById('root'));
+    </script>
+</body>
+</html>
